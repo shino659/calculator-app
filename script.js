@@ -1,235 +1,313 @@
-const display = document.getElementById('display');
-const historyEl = document.getElementById('history');
-const clearBtn = document.getElementById('clear');
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const startButton = document.getElementById('startButton');
+const overlay = document.getElementById('overlay');
+const scoreEl = document.getElementById('score');
+const livesEl = document.getElementById('lives');
+const levelEl = document.getElementById('level');
+
+const GAME_WIDTH = canvas.width;
+const GAME_HEIGHT = canvas.height;
 
 const state = {
-  displayValue: '0',
-  firstOperand: null,
-  operator: null,
-  waitingForSecondOperand: false,
-  error: null,
+  score: 0,
+  lives: 3,
+  level: 1,
+  isRunning: false,
+  isPaused: false,
 };
 
-const formatNumber = (value) => {
-  const hasTrailingDot = value.endsWith('.');
-  const [integer, decimal] = value.split('.');
-  const formattedInt = Number(integer).toLocaleString('ja-JP');
-  if (hasTrailingDot) return `${formattedInt}.`;
-  return decimal ? `${formattedInt}.${decimal}` : formattedInt;
+const paddle = {
+  width: 110,
+  height: 14,
+  x: (GAME_WIDTH - 110) / 2,
+  speed: 6,
+  direction: 0,
 };
 
-const updateDisplay = () => {
-  if (state.error) {
-    display.textContent = state.error;
-    display.classList.add('error');
-  } else {
-    display.textContent = formatNumber(state.displayValue);
-    display.classList.remove('error');
+const ball = {
+  x: GAME_WIDTH / 2,
+  y: GAME_HEIGHT - 60,
+  radius: 8,
+  speed: 4,
+  velocityX: 3,
+  velocityY: -4,
+};
+
+let bricks = [];
+const brickConfig = {
+  rowCount: 5,
+  columnCount: 9,
+  padding: 10,
+  offsetTop: 40,
+  offsetLeft: 35,
+  width: 60,
+  height: 18,
+};
+
+function createBricks() {
+  bricks = [];
+  for (let c = 0; c < brickConfig.columnCount; c += 1) {
+    for (let r = 0; r < brickConfig.rowCount; r += 1) {
+      const strength = Math.min(3, state.level + Math.floor(r / 2));
+      bricks.push({
+        x: (c * (brickConfig.width + brickConfig.padding)) + brickConfig.offsetLeft,
+        y: (r * (brickConfig.height + brickConfig.padding)) + brickConfig.offsetTop,
+        status: 1,
+        strength,
+      });
+    }
   }
+}
 
-  historyEl.textContent = buildHistory();
-  clearBtn.textContent = state.displayValue !== '0' || state.firstOperand !== null ? 'C' : 'AC';
-};
+function resetBall() {
+  ball.x = GAME_WIDTH / 2;
+  ball.y = GAME_HEIGHT - 60;
+  const speedScale = 1 + (state.level - 1) * 0.1;
+  ball.velocityX = (Math.random() > 0.5 ? 3 : -3) * speedScale;
+  ball.velocityY = -4 * speedScale;
+}
 
-const buildHistory = () => {
-  const { firstOperand, operator, waitingForSecondOperand, displayValue } = state;
-  if (state.error) return '';
-  if (firstOperand === null) return '';
-  if (waitingForSecondOperand) return `${formatNumber(String(firstOperand))} ${operator}`;
-  return `${formatNumber(String(firstOperand))} ${operator ?? ''} ${formatNumber(displayValue)}`.trim();
-};
+function drawPaddle() {
+  const gradient = ctx.createLinearGradient(paddle.x, 0, paddle.x + paddle.width, 0);
+  gradient.addColorStop(0, '#6cf0ff');
+  gradient.addColorStop(1, '#51c3ff');
+  ctx.fillStyle = gradient;
+  ctx.fillRect(paddle.x, GAME_HEIGHT - paddle.height - 12, paddle.width, paddle.height);
+}
 
-const resetState = () => {
-  state.displayValue = '0';
-  state.firstOperand = null;
-  state.operator = null;
-  state.waitingForSecondOperand = false;
-  state.error = null;
-};
+function drawBall() {
+  const glow = ctx.createRadialGradient(ball.x, ball.y, 2, ball.x, ball.y, 12);
+  glow.addColorStop(0, '#fff');
+  glow.addColorStop(1, 'rgba(108, 240, 255, 0)');
+  ctx.beginPath();
+  ctx.fillStyle = glow;
+  ctx.arc(ball.x, ball.y, ball.radius * 1.8, 0, Math.PI * 2);
+  ctx.fill();
 
-const clearEntry = () => {
-  if (state.error) {
-    resetState();
-  } else {
-    state.displayValue = '0';
-    state.waitingForSecondOperand = state.operator !== null;
-  }
-};
+  ctx.beginPath();
+  ctx.fillStyle = '#ffc857';
+  ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+  ctx.fill();
+}
 
-const inputDigit = (digit) => {
-  if (state.error) resetState();
-  if (state.waitingForSecondOperand) {
-    state.displayValue = digit;
-    state.waitingForSecondOperand = false;
-  } else {
-    state.displayValue = state.displayValue === '0' ? digit : state.displayValue + digit;
-  }
-};
+function drawBricks() {
+  bricks.forEach((brick) => {
+    if (brick.status !== 1) return;
+    const { x, y, strength } = brick;
+    const colors = ['#6cf0ff', '#5ef7c6', '#ffc857'];
+    const color = colors[(strength - 1) % colors.length];
+    ctx.fillStyle = color;
+    ctx.shadowBlur = 10;
+    ctx.shadowColor = color;
+    ctx.fillRect(x, y, brickConfig.width, brickConfig.height);
+    ctx.shadowBlur = 0;
+  });
+}
 
-const inputDecimal = () => {
-  if (state.error) resetState();
-  if (state.waitingForSecondOperand) {
-    state.displayValue = '0.';
-    state.waitingForSecondOperand = false;
-    return;
-  }
-  if (!state.displayValue.includes('.')) {
-    state.displayValue += '.';
-  }
-};
+function drawHUD() {
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
+  ctx.fillRect(0, 0, GAME_WIDTH, 32);
+  ctx.fillStyle = '#e8ecf1';
+  ctx.font = '14px "Segoe UI", sans-serif';
+  ctx.textAlign = 'left';
+  ctx.fillText(`Score: ${state.score}`, 12, 20);
+  ctx.textAlign = 'center';
+  ctx.fillText(`Lives: ${state.lives}`, GAME_WIDTH / 2, 20);
+  ctx.textAlign = 'right';
+  ctx.fillText(`Level: ${state.level}`, GAME_WIDTH - 12, 20);
+}
 
-const toggleSign = () => {
-  if (state.error) resetState();
-  if (state.displayValue === '0') return;
-  state.displayValue = state.displayValue.startsWith('-')
-    ? state.displayValue.slice(1)
-    : `-${state.displayValue}`;
-};
+function draw() {
+  ctx.clearRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+  drawHUD();
+  drawBricks();
+  drawPaddle();
+  drawBall();
+}
 
-const applyPercent = () => {
-  if (state.error) resetState();
-  const value = parseFloat(state.displayValue);
-  if (!Number.isFinite(value)) return;
-  state.displayValue = String(value / 100);
-};
-
-const calculate = () => {
-  const { firstOperand, operator } = state;
-  const secondOperand = parseFloat(state.displayValue);
-
-  if (firstOperand === null || operator === null || Number.isNaN(secondOperand)) return null;
-
-  switch (operator) {
-    case '+':
-      return firstOperand + secondOperand;
-    case '-':
-      return firstOperand - secondOperand;
-    case '*':
-      return firstOperand * secondOperand;
-    case '/':
-      if (secondOperand === 0) {
-        state.error = 'ゼロで割ることはできません';
-        return null;
+function collisionDetection() {
+  bricks.forEach((brick) => {
+    if (brick.status !== 1) return;
+    if (
+      ball.x > brick.x &&
+      ball.x < brick.x + brickConfig.width &&
+      ball.y > brick.y &&
+      ball.y < brick.y + brickConfig.height
+    ) {
+      ball.velocityY = -ball.velocityY;
+      brick.strength -= 1;
+      if (brick.strength <= 0) {
+        brick.status = 0;
+        state.score += 100;
+      } else {
+        state.score += 30;
       }
-      return firstOperand / secondOperand;
-    default:
-      return null;
-  }
-};
-
-const handleOperator = (nextOperator) => {
-  if (state.error) resetState();
-  const inputValue = parseFloat(state.displayValue);
-
-  if (state.operator && state.waitingForSecondOperand) {
-    state.operator = nextOperator;
-    return;
-  }
-
-  if (state.firstOperand === null && !Number.isNaN(inputValue)) {
-    state.firstOperand = inputValue;
-  } else if (state.operator) {
-    const result = calculate();
-    if (result === null && state.error) {
-      updateDisplay();
-      return;
     }
-    state.displayValue = String(result ?? inputValue);
-    state.firstOperand = result;
+  });
+}
+
+function updatePaddle() {
+  paddle.x += paddle.speed * paddle.direction;
+  if (paddle.x < 8) paddle.x = 8;
+  if (paddle.x + paddle.width > GAME_WIDTH - 8) paddle.x = GAME_WIDTH - 8 - paddle.width;
+}
+
+function updateBall() {
+  ball.x += ball.velocityX;
+  ball.y += ball.velocityY;
+
+  if (ball.x + ball.radius > GAME_WIDTH || ball.x - ball.radius < 0) {
+    ball.velocityX = -ball.velocityX;
+  }
+  if (ball.y - ball.radius < 32) {
+    ball.velocityY = -ball.velocityY;
   }
 
-  state.waitingForSecondOperand = true;
-  state.operator = nextOperator;
-};
-
-const handleEquals = () => {
-  if (state.error) resetState();
-  if (state.operator === null) return;
-  const result = calculate();
-  if (result === null && state.error) {
-    updateDisplay();
-    return;
+  const paddleTop = GAME_HEIGHT - paddle.height - 12;
+  if (
+    ball.y + ball.radius > paddleTop &&
+    ball.y + ball.radius < paddleTop + paddle.height &&
+    ball.x > paddle.x &&
+    ball.x < paddle.x + paddle.width
+  ) {
+    const collidePoint = ball.x - (paddle.x + paddle.width / 2);
+    const normalized = collidePoint / (paddle.width / 2);
+    const maxBounceAngle = Math.PI / 3;
+    const bounceAngle = normalized * maxBounceAngle;
+    const speed = Math.hypot(ball.velocityX, ball.velocityY);
+    ball.velocityX = speed * Math.sin(bounceAngle);
+    ball.velocityY = -Math.abs(speed * Math.cos(bounceAngle));
   }
 
-  state.displayValue = String(result);
-  state.firstOperand = null;
-  state.operator = null;
-  state.waitingForSecondOperand = false;
-};
-
-const handleBackspace = () => {
-  if (state.error) {
-    resetState();
-    return;
-  }
-
-  if (state.waitingForSecondOperand) {
-    state.displayValue = '0';
-    state.waitingForSecondOperand = false;
-    state.operator = null;
-    state.firstOperand = null;
-    return;
-  }
-
-  if (state.displayValue.length === 1 || (state.displayValue.length === 2 && state.displayValue.startsWith('-'))) {
-    state.displayValue = '0';
-  } else {
-    state.displayValue = state.displayValue.slice(0, -1);
-  }
-};
-
-const handleKeydown = (event) => {
-  const { key } = event;
-
-  if (/[0-9]/.test(key)) {
-    inputDigit(key);
-  } else if (key === '.') {
-    inputDecimal();
-  } else if (['+', '-', '*', '/'].includes(key)) {
-    handleOperator(key);
-  } else if (key === 'Enter' || key === '=') {
-    event.preventDefault();
-    handleEquals();
-  } else if (key === 'Backspace') {
-    handleBackspace();
-  } else if (key === 'Escape') {
-    resetState();
-  }
-
-  updateDisplay();
-};
-
-const handleButtonClick = (event) => {
-  const target = event.target;
-  if (!target.classList.contains('key')) return;
-
-  const digit = target.dataset.digit;
-  const action = target.dataset.action;
-
-  if (digit) {
-    inputDigit(digit);
-  }
-
-  if (action === 'decimal') inputDecimal();
-  if (action === 'sign') toggleSign();
-  if (action === 'percent') applyPercent();
-  if (action === 'operator') handleOperator(target.dataset.operator);
-  if (action === 'equals') handleEquals();
-  if (action === 'clear') {
-    if (clearBtn.textContent === 'AC') {
-      resetState();
+  if (ball.y + ball.radius > GAME_HEIGHT) {
+    state.lives -= 1;
+    updateStatus();
+    if (state.lives <= 0) {
+      endGame('ゲームオーバー... スタートで再挑戦！');
     } else {
-      clearEntry();
+      overlayMessage('ミス！スペースかスタートで再開');
+      pauseGame();
+      resetBall();
     }
   }
+}
 
-  updateDisplay();
-};
+function updateStatus() {
+  scoreEl.textContent = state.score;
+  livesEl.textContent = state.lives;
+  levelEl.textContent = state.level;
+}
 
-const init = () => {
-  document.querySelector('.keypad').addEventListener('click', handleButtonClick);
-  document.addEventListener('keydown', handleKeydown);
-  updateDisplay();
-};
+function overlayMessage(message) {
+  overlay.textContent = message;
+  overlay.classList.add('is-visible');
+}
 
-init();
+function hideOverlay() {
+  overlay.classList.remove('is-visible');
+  overlay.textContent = '';
+}
+
+function nextLevel() {
+  state.level += 1;
+  brickConfig.rowCount = Math.min(8, brickConfig.rowCount + 1);
+  resetBall();
+  createBricks();
+  overlayMessage(`レベル ${state.level}！スタートで続行`);
+  pauseGame();
+  updateStatus();
+}
+
+function checkWin() {
+  const remaining = bricks.filter((brick) => brick.status === 1);
+  if (remaining.length === 0) {
+    state.score += 500;
+    if (state.level >= 5) {
+      endGame('クリア！おめでとうございます！');
+    } else {
+      nextLevel();
+    }
+    updateStatus();
+  }
+}
+
+function gameLoop() {
+  if (!state.isRunning || state.isPaused) return;
+  draw();
+  collisionDetection();
+  updatePaddle();
+  updateBall();
+  checkWin();
+  requestAnimationFrame(gameLoop);
+}
+
+function startGame() {
+  state.score = 0;
+  state.lives = 3;
+  state.level = 1;
+  state.isRunning = true;
+  state.isPaused = false;
+  paddle.x = (GAME_WIDTH - paddle.width) / 2;
+  brickConfig.rowCount = 5;
+  createBricks();
+  resetBall();
+  updateStatus();
+  hideOverlay();
+  gameLoop();
+}
+
+function pauseGame() {
+  state.isPaused = true;
+}
+
+function resumeGame() {
+  if (!state.isRunning) return;
+  if (!state.isPaused) return;
+  state.isPaused = false;
+  hideOverlay();
+  gameLoop();
+}
+
+function endGame(message) {
+  state.isRunning = false;
+  state.isPaused = false;
+  overlayMessage(message);
+}
+
+function togglePause() {
+  if (!state.isRunning) return;
+  state.isPaused = !state.isPaused;
+  if (state.isPaused) {
+    overlayMessage('ポーズ中 - スペースか P で再開');
+  } else {
+    hideOverlay();
+    gameLoop();
+  }
+}
+
+startButton.addEventListener('click', () => {
+  startGame();
+});
+
+window.addEventListener('keydown', (event) => {
+  if (event.key === 'ArrowRight') paddle.direction = 1;
+  if (event.key === 'ArrowLeft') paddle.direction = -1;
+  if (event.key === ' ') {
+    if (!state.isRunning) startGame();
+    else if (state.isPaused) resumeGame();
+  }
+  if (event.key.toLowerCase() === 'p') {
+    togglePause();
+  }
+});
+
+window.addEventListener('keyup', (event) => {
+  if (event.key === 'ArrowRight' && paddle.direction === 1) paddle.direction = 0;
+  if (event.key === 'ArrowLeft' && paddle.direction === -1) paddle.direction = 0;
+});
+
+createBricks();
+draw();
+overlayMessage('スタートでゲーム開始！');
+updateStatus();

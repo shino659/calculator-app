@@ -3,43 +3,30 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>シンプル電卓</title>
+  <title>ブロックゲーム</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <main class="calculator" aria-label="電卓">
-    <header class="calculator__header">
-      <h1 class="calculator__title">シンプル電卓</h1>
-      <p class="calculator__hint">キーボード入力にも対応 (0-9, + - * /, Enter, Backspace, Escape)</p>
+  <main class="game" aria-label="ブロック崩しゲーム">
+    <header class="game__header">
+      <h1 class="game__title">ブロックゲーム</h1>
+      <p class="game__hint">← / → キーでパドルを動かし、ボールを落とさないようにしましょう。</p>
     </header>
-    <section class="display" aria-live="polite">
-      <div class="display__history" id="history" aria-label="計算履歴"></div>
-      <div class="display__value" id="display" aria-label="入力欄">0</div>
+    <section class="game__status" aria-live="polite">
+      <div class="status__item">スコア: <span id="score">0</span></div>
+      <div class="status__item">残りライフ: <span id="lives">3</span></div>
+      <div class="status__item">レベル: <span id="level">1</span></div>
     </section>
-    <section class="keypad" aria-label="電卓のキー">
-      <button class="key key--function" data-action="clear" id="clear">AC</button>
-      <button class="key key--function" data-action="sign">±</button>
-      <button class="key key--function" data-action="percent">%</button>
-      <button class="key key--operator" data-action="operator" data-operator="/">÷</button>
-
-      <button class="key" data-digit="7">7</button>
-      <button class="key" data-digit="8">8</button>
-      <button class="key" data-digit="9">9</button>
-      <button class="key key--operator" data-action="operator" data-operator="*">×</button>
-
-      <button class="key" data-digit="4">4</button>
-      <button class="key" data-digit="5">5</button>
-      <button class="key" data-digit="6">6</button>
-      <button class="key key--operator" data-action="operator" data-operator="-">−</button>
-
-      <button class="key" data-digit="1">1</button>
-      <button class="key" data-digit="2">2</button>
-      <button class="key" data-digit="3">3</button>
-      <button class="key key--operator" data-action="operator" data-operator="+">＋</button>
-
-      <button class="key key--wide" data-digit="0">0</button>
-      <button class="key" data-action="decimal">.</button>
-      <button class="key key--accent" data-action="equals">=</button>
+    <section class="game__board" aria-label="ゲームボード">
+      <canvas id="gameCanvas" width="640" height="480" aria-label="ブロック崩しキャンバス"></canvas>
+      <div class="overlay" id="overlay" aria-live="polite" aria-label="ゲーム状態の案内"></div>
+    </section>
+    <section class="game__controls" aria-label="ゲームの操作方法">
+      <button id="startButton" class="btn">ゲームスタート / リスタート</button>
+      <div class="control__hints">
+        <span>操作: ← / → でパドル移動</span>
+        <span>ポーズ: P キー</span>
+      </div>
     </section>
   </main>
   <script src="script.js"></script>
