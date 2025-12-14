@@ -10,11 +10,29 @@
   <main class="calculator" aria-label="電卓">
     <header class="calculator__header">
       <h1 class="calculator__title">シンプル電卓</h1>
-      <p class="calculator__hint">キーボード入力にも対応 (0-9, + - * /, Enter, Backspace, Escape)</p>
+      <div class="calculator__meta">
+        <p class="calculator__hint">キーボード入力にも対応 (0-9, + - * /, Enter, Backspace, Escape)</p>
+        <button class="theme-toggle" id="theme-toggle" type="button" aria-label="テーマ切替">🌙 / ☀️</button>
+      </div>
     </header>
     <section class="display" aria-live="polite">
-      <div class="display__history" id="history" aria-label="計算履歴"></div>
+      <div class="display__top">
+        <div class="display__history" id="history" aria-label="計算履歴"></div>
+        <div class="display__actions">
+          <button class="copy-btn" id="copy-btn" type="button">Copy</button>
+          <span class="display__feedback" id="feedback" role="status" aria-live="polite"></span>
+        </div>
+      </div>
       <div class="display__value" id="display" aria-label="入力欄">0</div>
+    </section>
+    <section class="tape" aria-label="計算履歴一覧">
+      <details class="tape__details" open>
+        <summary class="tape__summary">計算履歴 (最新 10 件)</summary>
+        <div class="tape__controls">
+          <button class="tape__clear" id="clear-history" type="button">Clear history</button>
+        </div>
+        <ul class="tape__list" id="tape-list" aria-live="polite"></ul>
+      </details>
     </section>
     <section class="keypad" aria-label="電卓のキー">
       <button class="key key--function" data-action="clear" id="clear">AC</button>
